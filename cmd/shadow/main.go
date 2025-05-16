@@ -12,8 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mdns "github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 
-	"shadow/internal/gossip"
 	"shadow/internal/identity"
+	gossip "shadow/internal/pubsub"
 )
 
 type mdnsNotifee struct{ host host.Host }

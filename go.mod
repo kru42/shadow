@@ -5,10 +5,13 @@ go 1.23.8
 toolchain go1.24.3
 
 require golang.org/x/crypto v0.38.0 // NaCl for encryption
+
 require github.com/tv42/zbase32 v0.0.0-20220222190657-f76a9fc892fa
 
+require github.com/libp2p/go-libp2p-kad-dht v0.33.0 // for DHT
 
 require (
+	github.com/Jorropo/jsync v1.0.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -47,7 +50,6 @@ require (
 	github.com/libp2p/go-flow-metrics v0.2.0 // indirect
 	github.com/libp2p/go-libp2p v0.41.1 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.4.1 // indirect
-	github.com/libp2p/go-libp2p-kad-dht v0.33.0 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.7.0 // indirect
 	github.com/libp2p/go-libp2p-pubsub v0.13.1 // indirect
 	github.com/libp2p/go-libp2p-record v0.3.1 // indirect
