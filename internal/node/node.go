@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
-	ma "github.com/multiformats/go-multiaddr"
 
 	"shadow/internal/dht"
 	"shadow/internal/identity"
@@ -25,24 +24,15 @@ type Node struct {
 }
 
 func NewNode(ctx context.Context, id *identity.Identity) (*Node, error) {
-	// Define static relay multiaddrs
-	relayAddrs := []string{
-		"/ip4/1.2.3.4/tcp/4001/p2p/QmRelayPeerID1",
-		"/ip4/5.6.7.8/tcp/4001/p2p/QmRelayPeerID2",
-	}
+	relayAddr := "/ip4/127.0.0.1/tcp/4001/p2p/12D3KooWHRn1EADrZmmH9Ngs42bLe2cbSXvVtLoART18MiLiXC59"
 
 	var staticRelays []peer.AddrInfo
-	for _, addrStr := range relayAddrs {
-		maddr, err := ma.NewMultiaddr(addrStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid multiaddr: %w", err)
-		}
-		ai, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid AddrInfo: %w", err)
-		}
-		staticRelays = append(staticRelays, *ai)
+	ai, err := peer.AddrInfoFromString(relayAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse relay address: %w", err)
 	}
+
+	staticRelays = append(staticRelays, *ai)
 
 	h, err := libp2p.New(
 		libp2p.Identity(id.PrivateKey()),
