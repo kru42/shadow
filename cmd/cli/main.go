@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"shadow/internal/crypto"
 	"shadow/internal/identity"
 	"shadow/internal/node"
 )
@@ -127,6 +128,12 @@ func main() {
 	fmt.Println("Joined pubsub topic: chat")
 	fmt.Println("Type messages to send. Commands: /peers, /help, /quit")
 
+	// Derive a shared key for the group chat (using own priv/pub for now)
+	sharedKey, err := crypto.DeriveShared(id.PrivateKey(), id.PublicKey())
+	if err != nil {
+		panic(err)
+	}
+
 	// REPL for chat and commands
 	scanner := bufio.NewScanner(os.Stdin)
 	go func() {
@@ -191,8 +198,14 @@ func main() {
 					s.Close()
 					continue
 				}
-				// Default: send to pubsub
-				err := topic.Publish(ctx, []byte(fmt.Sprintf("%s: %s", *name, msg)))
+				// Default: send to pubsub (ENCRYPT)
+				plain := fmt.Sprintf("%s: %s", *name, msg)
+				enc, err := crypto.Seal(sharedKey, []byte(plain))
+				if err != nil {
+					fmt.Println("Encryption failed:", err)
+					continue
+				}
+				err = topic.Publish(ctx, enc)
 				if err != nil {
 					fmt.Println("Failed to publish:", err)
 				}
@@ -200,12 +213,17 @@ func main() {
 		}
 	}()
 
-	// Reader for receiving messages
+	// Reader for receiving messages (DECRYPT)
 	for {
 		msg, err := sub.Next(ctx)
 		if err != nil {
 			break
 		}
-		fmt.Printf("[msg] %s\n", string(msg.Data))
+		dec, err := crypto.Open(sharedKey, msg.Data)
+		if err != nil {
+			fmt.Printf("[msg] <decryption failed>\n")
+			continue
+		}
+		fmt.Printf("[msg] %s\n", string(dec))
 	}
 }
