@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	dhtdisc "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 
 	"shadow/internal/identity"
 	"shadow/internal/node"
-	"shadow/internal/pubsub"
 )
 
 func main() {
@@ -33,6 +31,14 @@ func main() {
 	id, err := identity.LoadOrCreate("data/"+*name, *name)
 	if err != nil {
 		panic(err)
+	}
+
+	// If relay address is not provided, try to load from relay.addr file
+	if *relayAddrStr == "" {
+		if b, err := os.ReadFile("data/relay.addr"); err == nil {
+			*relayAddrStr = string(b)
+			fmt.Println("Loaded relay address from data/relay.addr:", *relayAddrStr)
+		}
 	}
 
 	// Graceful shutdown on Ctrl+C
@@ -53,21 +59,14 @@ func main() {
 
 	n.PrintInfo()
 
-	// You can announce yourself by putting your peer ID into the DHT
-	go func() {
-		disc := dhtdisc.NewRoutingDiscovery(n.DHT)
-		if _, err := disc.Advertise(ctx, n.Host.ID().String()); err != nil {
-			fmt.Println("Failed to advertise:", err)
-		} else {
-			fmt.Println("Advertised peer ID in DHT:", n.Host.ID())
-		}
-	}()
-
 	if *peerIDStr != "" {
 		pid, err := peer.Decode(*peerIDStr)
 		if err != nil {
 			fmt.Println("Invalid peer ID:", err)
 		} else {
+			// Wait for DHT to populate
+			time.Sleep(5 * time.Second)
+
 			ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 			defer cancel()
 
@@ -99,14 +98,16 @@ func main() {
 		}
 	}
 
-	// Init pubsub
-	ps, err := pubsub.NewPubSub(ctx, n.Host)
+	// Join pubsub topic
+	topic, err := n.PubSub.Join("chat")
 	if err != nil {
-		panic(err)
+		fmt.Println("Failed to join pubsub topic:", err)
+		return
 	}
-	topic, sub, err := ps.JoinTopic("chat")
+	sub, err := topic.Subscribe()
 	if err != nil {
-		panic(err)
+		fmt.Println("Failed to subscribe to pubsub topic:", err)
+		return
 	}
 
 	fmt.Println("Joined pubsub topic: chat")

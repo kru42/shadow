@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -29,6 +30,19 @@ func main() {
 	}
 
 	printHostInfo(h)
+
+	// Persist relay multiaddr to data/relay.addr
+	if len(h.Addrs()) > 0 {
+		fullAddr := h.Addrs()[0].Encapsulate(ma.StringCast("/p2p/" + h.ID().String()))
+		relayAddrPath := filepath.Join("data", "relay.addr")
+		if err := os.MkdirAll("data", 0700); err != nil {
+			log.Printf("Failed to create data dir: %v", err)
+		} else if err := os.WriteFile(relayAddrPath, []byte(fullAddr.String()), 0644); err != nil {
+			log.Printf("Failed to write relay address: %v", err)
+		} else {
+			fmt.Printf("Relay address persisted to %s\n", relayAddrPath)
+		}
+	}
 
 	// Wait until Ctrl+C
 	ch := make(chan os.Signal, 1)
