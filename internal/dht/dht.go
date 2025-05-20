@@ -18,9 +18,8 @@ type DHT struct {
 
 // DefaultBootstrapPeers are the default bootstrap peers for the DHT.
 var DefaultBootstrapPeers = []string{
-	"/ip4/127.0.0.1/tcp/4001/p2p/12D3KooWECxpYs3ByQxDCgnZ2u9tbb3qhaBbLCRX6soLztC7xrJ1",  // relay
-	"/ip4/127.0.0.1/tcp/56641/p2p/12D3KooWSAHX3PDuFo5BKpHGkU8jpPoFrYHLACnPKB13ePKe2Rjj", // bob
-	"/ip4/127.0.0.1/tcp/56652/p2p/12D3KooWCdnSstPmm2hb2DYLUgfYfbNpgucHRAzB52fo5q4hZn1A", // alice
+	"/ip4/127.0.0.1/tcp/62329/p2p/12D3KooWSAHX3PDuFo5BKpHGkU8jpPoFrYHLACnPKB13ePKe2Rjj", // bob
+	"/ip4/127.0.0.1/tcp/62335/p2p/12D3KooWCdnSstPmm2hb2DYLUgfYfbNpgucHRAzB52fo5q4hZn1A", // alice
 }
 
 func NewDHT(ctx context.Context, h host.Host) (*DHT, error) {
@@ -79,7 +78,19 @@ func (d *DHT) Close() error {
 	return d.impl.Close()
 }
 
-func BootstrapPeers() ([]peer.AddrInfo, error) {
+func BootstrapPeers(relayId peer.ID) ([]peer.AddrInfo, error) {
+	// Add the relay ID to the list of bootstrap peers
+	fmt.Println("Relay ID:", relayId.String())
+	relayCid := peer.ToCid(relayId)
+	fmt.Println("Relay CID:", relayCid.String())
+	relayAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/p2p/%s", relayCid.String())
+	_, err := peer.AddrInfoFromString(relayAddr)
+	if err != nil {
+		return nil, err
+	}
+	// Add the relay address to the list of bootstrap peers
+	DefaultBootstrapPeers = append(DefaultBootstrapPeers, relayAddr)
+
 	var peers []peer.AddrInfo
 	for _, addr := range DefaultBootstrapPeers {
 		maddr, err := multiaddr.NewMultiaddr(addr)

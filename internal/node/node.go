@@ -35,6 +35,8 @@ func NewNode(ctx context.Context, id *identity.Identity, relayAddr string) (*Nod
 		return nil, fmt.Errorf("failed to parse relay address: %w", err)
 	}
 
+	fmt.Println("Connecting to relay:", ai.ID, "at", ai.Addrs)
+
 	h, err := libp2p.New(
 		libp2p.Identity(id.PrivateKey()),
 		libp2p.EnableAutoRelayWithStaticRelays([]peer.AddrInfo{*ai}),
@@ -64,7 +66,7 @@ func NewNode(ctx context.Context, id *identity.Identity, relayAddr string) (*Nod
 	}
 
 	// Connect to bootstrap peers
-	peers, err := dht.BootstrapPeers()
+	peers, err := dht.BootstrapPeers(*&ai.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bootstrap peers: %w", err)
 	}

@@ -7,14 +7,18 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"shadow/internal/identity"
 	"shadow/internal/node"
 )
+
+const privateMsgProtocol = "/chat/1.0.0"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -58,6 +62,16 @@ func main() {
 	defer n.Shutdown(ctx)
 
 	n.PrintInfo()
+
+	// Stream handler for private messages
+	n.Host.SetStreamHandler(privateMsgProtocol, func(s network.Stream) {
+		defer s.Close()
+		buf := make([]byte, 4096)
+		nr, err := s.Read(buf)
+		if err == nil && nr > 0 {
+			fmt.Printf("[private msg] %s\n", string(buf[:nr]))
+		}
+	})
 
 	if *peerIDStr != "" {
 		pid, err := peer.Decode(*peerIDStr)
@@ -111,19 +125,77 @@ func main() {
 	}
 
 	fmt.Println("Joined pubsub topic: chat")
-	fmt.Println("Type messages to send:")
+	fmt.Println("Type messages to send. Commands: /peers, /help, /quit")
 
-	// Reader for sending messages
+	// REPL for chat and commands
+	scanner := bufio.NewScanner(os.Stdin)
 	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			msg := scanner.Text()
 			if msg == "" {
 				continue
 			}
-			err := topic.Publish(ctx, []byte(fmt.Sprintf("%s: %s", *name, msg)))
-			if err != nil {
-				fmt.Println("Failed to publish:", err)
+			switch {
+			case msg == "/quit":
+				fmt.Println("Exiting...")
+				cancel()
+				return
+			case msg == "/peers":
+				fmt.Println("Connected peers:")
+				for _, p := range n.Host.Network().Peers() {
+					addrs := n.Host.Peerstore().Addrs(p)
+					fmt.Printf("- %s", p.Loggable())
+					if len(addrs) > 0 {
+						fmt.Printf(" (")
+						for i, a := range addrs {
+							if i > 0 {
+								fmt.Print(", ")
+							}
+							fmt.Print(a.String())
+						}
+						fmt.Print(")")
+					}
+					fmt.Println()
+				}
+			case msg == "/help":
+				fmt.Println("Available commands:")
+				fmt.Println("  /peers   - List connected peers")
+				fmt.Println("  /quit    - Exit the chat")
+				fmt.Println("  /help    - Show this help message")
+				fmt.Println("  /msg <peerid> <message> - Send a private message")
+				fmt.Println("  <text>   - Send a message to the chat")
+			default:
+				// Handle /msg command
+				if strings.HasPrefix(msg, "/msg ") {
+					parts := strings.SplitN(msg, " ", 3)
+					if len(parts) < 3 {
+						fmt.Println("Usage: /msg <peerid> <message>")
+						continue
+					}
+					peerIDStr := parts[1]
+					privateMsg := parts[2]
+					pid, err := peer.Decode(peerIDStr)
+					if err != nil {
+						fmt.Println("Invalid peer ID:", err)
+						continue
+					}
+					s, err := n.Host.NewStream(ctx, pid, privateMsgProtocol)
+					if err != nil {
+						fmt.Println("Failed to open stream to peer:", err)
+						continue
+					}
+					_, err = s.Write([]byte(fmt.Sprintf("[from %s] %s", *name, privateMsg)))
+					if err != nil {
+						fmt.Println("Failed to send message:", err)
+					}
+					s.Close()
+					continue
+				}
+				// Default: send to pubsub
+				err := topic.Publish(ctx, []byte(fmt.Sprintf("%s: %s", *name, msg)))
+				if err != nil {
+					fmt.Println("Failed to publish:", err)
+				}
 			}
 		}
 	}()

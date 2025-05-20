@@ -29,20 +29,22 @@ func main() {
 		log.Fatalf("Failed to create host: %v", err)
 	}
 
-	printHostInfo(h)
-
-	// Persist relay multiaddr to data/relay.addr
-	if len(h.Addrs()) > 0 {
+	// Always create and persist relay multiaddr to data/relay.addr
+	relayAddrPath := filepath.Join("data", "relay.addr")
+	if err := os.MkdirAll("data", 0700); err != nil {
+		log.Printf("Failed to create data dir: %v\n", err)
+	} else if len(h.Addrs()) > 0 {
 		fullAddr := h.Addrs()[0].Encapsulate(ma.StringCast("/p2p/" + h.ID().String()))
-		relayAddrPath := filepath.Join("data", "relay.addr")
-		if err := os.MkdirAll("data", 0700); err != nil {
-			log.Printf("Failed to create data dir: %v", err)
-		} else if err := os.WriteFile(relayAddrPath, []byte(fullAddr.String()), 0644); err != nil {
-			log.Printf("Failed to write relay address: %v", err)
+		if err := os.WriteFile(relayAddrPath, []byte(fullAddr.String()), 0644); err != nil {
+			log.Printf("Failed to write relay address: %v\n", err)
 		} else {
-			fmt.Printf("Relay address persisted to %s\n", relayAddrPath)
+			fmt.Printf("Relay address persisted to %s: %s\n", relayAddrPath, fullAddr.String())
 		}
+	} else {
+		log.Printf("No addresses found for host, cannot persist relay address.\n")
 	}
+
+	printHostInfo(h)
 
 	// Wait until Ctrl+C
 	ch := make(chan os.Signal, 1)

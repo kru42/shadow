@@ -58,3 +58,31 @@ func LoadOrCreateRelayHost(ctx context.Context, dataDir string, listenAddr strin
 	}
 	return h, nil
 }
+
+// LoadRelayHost loads a persisted private key and returns a libp2p host. Fails if the key does not exist.
+func LoadRelayHost(ctx context.Context, dataDir string, listenAddr string) (host.Host, error) {
+	keyPath := filepath.Join(dataDir, keyFileName)
+	b, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("relay key not found at %s: %w", keyPath, err)
+	}
+	// decode base64
+	keyBytes, err := base64.StdEncoding.DecodeString(string(b))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode relay key: %w", err)
+	}
+	priv, err := crypto.UnmarshalPrivateKey(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal relay key: %w", err)
+	}
+
+	h, err := libp2p.New(
+		libp2p.Identity(priv),
+		libp2p.ListenAddrStrings(listenAddr),
+		libp2p.EnableRelay(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create relay host: %w", err)
+	}
+	return h, nil
+}
