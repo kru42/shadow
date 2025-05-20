@@ -9,6 +9,7 @@ require golang.org/x/crypto v0.38.0 // NaCl for encryption
 require github.com/tv42/zbase32 v0.0.0-20220222190657-f76a9fc892fa
 
 require github.com/libp2p/go-libp2p-kad-dht v0.33.0 // for DHT
+require github.com/libp2p/go-libp2p v0.41.1
 
 require (
 	github.com/Jorropo/jsync v1.0.1 // indirect

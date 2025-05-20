@@ -21,6 +21,7 @@ func main() {
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/4001"),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
+		libp2p.EnableRelay(),
 		libp2p.EnableRelayService(),
 	)
 	if err != nil {
