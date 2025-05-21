@@ -51,6 +51,22 @@ func (id *Identity) DisplayName() string {
 	return fmt.Sprintf("%s@%s", id.username, encodeID(id.peerID))
 }
 
+func (id *Identity) Zbase32PeerID() string {
+	return encodeID(id.peerID)
+}
+
+func PeerIDToZbase32(id peer.ID) string {
+	return zbase32.EncodeToString([]byte(id))
+}
+
+func Zbase32ToPeerID(encoded string) (peer.ID, error) {
+	decoded, err := zbase32.DecodeString(encoded)
+	if err != nil {
+		return "", err
+	}
+	return peer.ID(decoded), nil
+}
+
 func encodeID(id peer.ID) string {
 	// Encode the ID using zbase32
 	encoded := make([]byte, zbase32.EncodedLen(len(id)))

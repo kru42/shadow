@@ -9,14 +9,13 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
-	"shadow/internal/crypto"
 	"shadow/internal/identity"
 	"shadow/internal/node"
+	"shadow/internal/utils"
 )
 
 const privateMsgProtocol = "/chat/1.0.0"
@@ -27,8 +26,8 @@ func main() {
 
 	relayAddrStr := flag.String("relay", "", "Multiaddr of static relay")
 	name := flag.String("name", "anon", "Identity name")
-	peerAddrStr := flag.String("peer", "", "Multiaddr of another peer to connect to")
-	peerIDStr := flag.String("peerid", "", "Connect to peer by ID using DHT")
+	// peerAddrStr := flag.String("peer", "", "Multiaddr of another peer to connect to")
+	// peerIDStr := flag.String("peerid", "", "Connect to peer by ID using DHT")
 	flag.Parse()
 
 	fmt.Println("Name:", *name)
@@ -36,6 +35,15 @@ func main() {
 	id, err := identity.LoadOrCreate("data/"+*name, *name)
 	if err != nil {
 		panic(err)
+	}
+
+	// Generate identicon for self
+	pubBytes, _ := id.PublicKey().Raw()
+	iconPath := fmt.Sprintf("data/%s_identicon.png", *name)
+	if err := utils.GenerateIdenticon(pubBytes, iconPath); err == nil {
+		fmt.Println("Generated identicon at:", iconPath)
+	} else {
+		fmt.Println("Failed to generate identicon:", err)
 	}
 
 	// If relay address is not provided, try to load from relay.addr file
@@ -63,6 +71,13 @@ func main() {
 	defer n.Shutdown(ctx)
 
 	n.PrintInfo()
+	fmt.Println("Your PeerID (zbase32):", identity.PeerIDToZbase32(n.Host.ID()))
+
+	// Channel for incoming private messages
+	privateMsgChan := make(chan string, 10)
+
+	// Channel to signal REPL exit
+	done := make(chan struct{})
 
 	// Stream handler for private messages
 	n.Host.SetStreamHandler(privateMsgProtocol, func(s network.Stream) {
@@ -70,160 +85,98 @@ func main() {
 		buf := make([]byte, 4096)
 		nr, err := s.Read(buf)
 		if err == nil && nr > 0 {
-			fmt.Printf("[private msg] %s\n", string(buf[:nr]))
+			privateMsgChan <- string(buf[:nr])
 		}
 	})
-
-	if *peerIDStr != "" {
-		pid, err := peer.Decode(*peerIDStr)
-		if err != nil {
-			fmt.Println("Invalid peer ID:", err)
-		} else {
-			// Wait for DHT to populate
-			time.Sleep(5 * time.Second)
-
-			ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-			defer cancel()
-
-			// Search for peer in DHT
-			pi, err := n.DHT.FindPeer(ctx, pid)
-			if err != nil {
-				fmt.Println("Peer not found:", err)
-			} else {
-				if err := n.Host.Connect(ctx, pi); err != nil {
-					fmt.Println("Failed to connect to peer:", err)
-				} else {
-					fmt.Println("Connected to peer:", pi.ID)
-				}
-			}
-		}
-	}
-
-	// Connect to another peer if provided
-	if *peerAddrStr != "" {
-		ai, err := peer.AddrInfoFromString(*peerAddrStr)
-		if err != nil {
-			fmt.Println("Invalid peer address:", err)
-		} else {
-			if err := n.Host.Connect(ctx, *ai); err != nil {
-				fmt.Println("Failed to connect to peer:", err)
-			} else {
-				fmt.Println("Connected to peer:", ai.ID)
-			}
-		}
-	}
-
-	// Join pubsub topic
-	topic, err := n.PubSub.Join("chat")
-	if err != nil {
-		fmt.Println("Failed to join pubsub topic:", err)
-		return
-	}
-	sub, err := topic.Subscribe()
-	if err != nil {
-		fmt.Println("Failed to subscribe to pubsub topic:", err)
-		return
-	}
-
-	fmt.Println("Joined pubsub topic: chat")
-	fmt.Println("Type messages to send. Commands: /peers, /help, /quit")
-
-	// Derive a shared key for the group chat (using own priv/pub for now)
-	sharedKey, err := crypto.DeriveShared(id.PrivateKey(), id.PublicKey())
-	if err != nil {
-		panic(err)
-	}
 
 	// REPL for chat and commands
 	scanner := bufio.NewScanner(os.Stdin)
 	go func() {
-		for scanner.Scan() {
-			msg := scanner.Text()
-			if msg == "" {
-				continue
-			}
-			switch {
-			case msg == "/quit":
-				fmt.Println("Exiting...")
-				cancel()
-				return
-			case msg == "/peers":
-				fmt.Println("Connected peers:")
-				for _, p := range n.Host.Network().Peers() {
-					addrs := n.Host.Peerstore().Addrs(p)
-					fmt.Printf("- %s", p.Loggable())
-					if len(addrs) > 0 {
-						fmt.Printf(" (")
-						for i, a := range addrs {
-							if i > 0 {
-								fmt.Print(", ")
-							}
-							fmt.Print(a.String())
-						}
-						fmt.Print(")")
-					}
-					fmt.Println()
-				}
-			case msg == "/help":
-				fmt.Println("Available commands:")
-				fmt.Println("  /peers   - List connected peers")
-				fmt.Println("  /quit    - Exit the chat")
-				fmt.Println("  /help    - Show this help message")
-				fmt.Println("  /msg <peerid> <message> - Send a private message")
-				fmt.Println("  <text>   - Send a message to the chat")
+		for {
+			select {
+			case pm := <-privateMsgChan:
+				fmt.Printf("\n[private msg] %s\n", pm)
+				fmt.Print("> ")
 			default:
-				// Handle /msg command
-				if strings.HasPrefix(msg, "/msg ") {
-					parts := strings.SplitN(msg, " ", 3)
-					if len(parts) < 3 {
-						fmt.Println("Usage: /msg <peerid> <message>")
+				if scanner.Scan() {
+					msg := scanner.Text()
+					if msg == "" {
 						continue
 					}
-					peerIDStr := parts[1]
-					privateMsg := parts[2]
-					pid, err := peer.Decode(peerIDStr)
-					if err != nil {
-						fmt.Println("Invalid peer ID:", err)
-						continue
+					switch {
+					case msg == "/quit":
+						fmt.Println("Exiting...")
+						cancel()
+						close(done) // Signal main to exit
+						return
+					case msg == "/peers":
+						fmt.Println("Connected peers:")
+						for _, p := range n.Host.Network().Peers() {
+							addrs := n.Host.Peerstore().Addrs(p)
+							fmt.Printf("- %s", p.Loggable())
+							if len(addrs) > 0 {
+								fmt.Printf(" (")
+								for i, a := range addrs {
+									if i > 0 {
+										fmt.Print(", ")
+									}
+									fmt.Print(a.String())
+								}
+								fmt.Print(")")
+							}
+							fmt.Println()
+						}
+					case msg == "/help":
+						fmt.Println("Available commands:")
+						fmt.Println("  /peers   - List connected peers")
+						fmt.Println("  /quit    - Exit the chat")
+						fmt.Println("  /help    - Show this help message")
+						fmt.Println("  /msg <peerid> <message> - Send a private message")
+						fmt.Println("  <text>   - Send a message to the chat")
+					default:
+						// Only handle /msg command, ignore group chat
+						if strings.HasPrefix(msg, "/msg ") {
+							parts := strings.SplitN(msg, " ", 3)
+							if len(parts) < 3 {
+								fmt.Println("Usage: /msg <peerid> <message>")
+								continue
+							}
+
+							// Extract peer ID and message
+							peerIDStr := parts[1]
+							privateMsg := parts[2]
+
+							var pid peer.ID
+							if strings.HasPrefix(peerIDStr, "z:") {
+								pid, err = identity.Zbase32ToPeerID(peerIDStr[2:])
+							} else {
+								pid, err = peer.Decode(peerIDStr)
+							}
+							if err != nil {
+								fmt.Println("Invalid peer ID:", err)
+								continue
+							}
+							s, err := n.Host.NewStream(ctx, pid, privateMsgProtocol)
+							if err != nil {
+								fmt.Println("Failed to open stream to peer:", err)
+								continue
+							}
+							_, err = s.Write([]byte(fmt.Sprintf("[from %s] %s", *name, privateMsg)))
+							if err != nil {
+								fmt.Println("Failed to send message:", err)
+							}
+							s.Close()
+							continue
+						}
+						// Ignore all other input (no group chat)
 					}
-					s, err := n.Host.NewStream(ctx, pid, privateMsgProtocol)
-					if err != nil {
-						fmt.Println("Failed to open stream to peer:", err)
-						continue
-					}
-					_, err = s.Write([]byte(fmt.Sprintf("[from %s] %s", *name, privateMsg)))
-					if err != nil {
-						fmt.Println("Failed to send message:", err)
-					}
-					s.Close()
-					continue
-				}
-				// Default: send to pubsub (ENCRYPT)
-				plain := fmt.Sprintf("%s: %s", *name, msg)
-				enc, err := crypto.Seal(sharedKey, []byte(plain))
-				if err != nil {
-					fmt.Println("Encryption failed:", err)
-					continue
-				}
-				err = topic.Publish(ctx, enc)
-				if err != nil {
-					fmt.Println("Failed to publish:", err)
+				} else {
+					close(done) // Signal main to exit on EOF
+					return
 				}
 			}
 		}
 	}()
 
-	// Reader for receiving messages (DECRYPT)
-	for {
-		msg, err := sub.Next(ctx)
-		if err != nil {
-			break
-		}
-		dec, err := crypto.Open(sharedKey, msg.Data)
-		if err != nil {
-			fmt.Printf("[msg] <decryption failed>\n")
-			continue
-		}
-		fmt.Printf("[msg] %s\n", string(dec))
-	}
+	<-done // Block main until REPL signals exit
 }
