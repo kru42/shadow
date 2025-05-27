@@ -13,6 +13,14 @@ require github.com/libp2p/go-libp2p-kad-dht v0.33.0 // for DHT
 require github.com/libp2p/go-libp2p v0.41.1
 
 require (
+	github.com/c-bata/go-prompt v0.2.6 // indirect
+	github.com/mattn/go-colorable v0.1.7 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/mattn/go-tty v0.0.3 // indirect
+	github.com/pkg/term v1.2.0-beta.2 // indirect
+)
+
+require (
 	filippo.io/edwards25519 v1.1.0
 	github.com/Jorropo/jsync v1.0.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect

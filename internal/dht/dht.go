@@ -18,8 +18,8 @@ type DHT struct {
 
 // DefaultBootstrapPeers are the default bootstrap peers for the DHT.
 var DefaultBootstrapPeers = []string{
-	"/ip4/127.0.0.1/tcp/60284/p2p/12D3KooWSAHX3PDuFo5BKpHGkU8jpPoFrYHLACnPKB13ePKe2Rjj", // bob
-	"/ip4/127.0.0.1/tcp/60303/p2p/12D3KooWCdnSstPmm2hb2DYLUgfYfbNpgucHRAzB52fo5q4hZn1A", // alice
+	"/ip4/127.0.0.1/tcp/59810/p2p/12D3KooWSAHX3PDuFo5BKpHGkU8jpPoFrYHLACnPKB13ePKe2Rjj", // bob
+	"/ip4/127.0.0.1/tcp/59848/p2p/12D3KooWCdnSstPmm2hb2DYLUgfYfbNpgucHRAzB52fo5q4hZn1A", // alice
 }
 
 func NewDHT(ctx context.Context, h host.Host) (*DHT, error) {
